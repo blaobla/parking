@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>停车缴费系统</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen p-4">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-6">停车缴费系统</h1>
+        
+        <!-- 访问计数器显示 -->
+        <div class="text-center text-gray-600 mb-4">
+            <span>页面访问次数: </span>
+            <span id="visitCount" class="font-semibold">0</span>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">选择授权ID:</label>
+            <select id="authSelect" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+        </div>
+
+        <div id="errorMessage" class="text-red-500 text-sm mb-4 hidden"></div>
+
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- 查询区域 -->
+            <div class="flex-1 bg-white p-4 rounded-lg shadow-md">
+                <button onclick="queryParking()" id="queryBtn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed mb-4 flex justify-center items-center">
+                    <span id="queryText">查询</span>
+                    <svg id="querySpinner" class="hidden w-5 h-5 ml-2 animate-spin text-white" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4" opacity="0.3"/><path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                </button>
+                <div class="overflow-x-auto">
+                    <table id="queryResult" class="w-full text-sm text-gray-700">
+                        <thead class="bg-gray-200">
+                            <tr>
+                                <th class="py-2 px-3 text-left">费用</th>
+                                <th class="py-2 px-3 text-left">入场时间</th>
+                                <th class="py-2 px-3 text-left">时长</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 支付区域 -->
+            <div class="flex-1 bg-white p-4 rounded-lg shadow-md">
+                <button onclick="payParking()" id="payBtn" class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed mb-4 flex justify-center items-center">
+                    <span id="payText">支付</span>
+                    <svg id="paySpinner" class="hidden w-5 h-5 ml-2 animate-spin text-white" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4" opacity="0.3"/><path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                </button>
+                <div class="overflow-x-auto">
+                    <table id="payHistory" class="w-full text-sm text-gray-700">
+                        <thead class="bg-gray-200">
+                            <tr>
+                                <th class="py-2 px-3 text-left">支付时间</th>
+                                <th class="py-2 px-3 text-left">支付结果</th>
+                                <th class="py-2 px-3 text-left">使用ID</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 固定车牌号
+        const CAR_NO = "粤BBQ9667";
+        
+        // 省略具体的authorizationList内容，但保留结构
+        const authorizationList = {
+            "0":"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjU5ZjNmNjMyYTQ0NzE0YmM4M2E4MzE4MTUzZTcxMjZjMTE5Y2RkNzY5Mjk5MmY4ZmI3MzNlZjVlMjFmYzYxNGU2ODY1NzVkY2VmNjYzNTRjIn0.eyJhdWQiOiIyIiwianRpIjoiNTlmM2Y2MzJhNDQ3MTRiYzgzYTgzMTgxNTNlNzEyNmMxMTljZGQ3NjkyOTkyZjhmYjczM2VmNWUyMWZjNjE0ZTY4NjU3NWRjZWY2NjM1NGMiLCJpYXQiOjE3NDEwMTM1MzAsIm5iZiI6MTc0MTAxMzUzMCwiZXhwIjoxNzQzNjA1NTMwLCJzdWIiOiI5NTM2MzkiLCJzY29wZXMiOlsiKiJdfQ.bVGmh8x_QUnA-FHvz9qR3nmgHyVKcxUK7Kjp67K9uo-c527-l_h_UmZexDwS6tRtbVQLlH9VNZ7G-0V7UHhcpXd0yzezmPqqa_HgWvsveiwlhCfCW95YTPla2hGD2apBF--PT0yZfD8fF0-XZSJCuVLN1tJkXYraOoI6M9xH0vUEq_Hnx2gmkWeuOSFwyJToDOjsp5UUdV7yNixLcb7tDTgOsIsgIxtWpc26Ax0b4W7yuzBCqaMWRpqrgdHJafbEjsqA12ydKruWTUBdwpllDpNK8w4APjymLgUm5tlon2zvPWqje84NQ1Xxg3SAXRL25DlvJRChDDt1sAnex7tNrWs0zUfoe8WgrXfrPVWInluwZFd4gctIMmJHFvwcoedURV8wqIcJfGnRhe9W3YNGgUozoB85ysCCQHhs_X4V_VXV-njsGWsEvWWrbEbs98a4C5PgAoye3n8gZ-Uy7EkPhKDq3817fgW86IRvaWEEfexBhb_Cbf-yZZ1re7W45hs1P-AYpcIzh7hmiEN3UdFDqZZwVf2cpd4MjLrKK6uR00pNe5QzbREXTv0U-4Ty88Lw1-fFPxMMWYiAQ1WZCY7Zxoe9rdw6eqXTUH2ILmGIlvYvQEN-k_A2UY_YGo0hQLwaRZGVlmOpDOVvmEz5wt_ttY6REwtzXlr19ppVyVdj4eE",
+            "1":"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6ImZiMWI0ODBhYWYzODNiNjM0NzIyNzFjMGM3NjY4ZWRjMzE3NzY5OTQyZjcxNGQ1YTliZmQxY2IzYTRiYTI4ZjU3YjdhOWY4NTJmM2E0NTRhIn0.eyJhdWQiOiIyIiwianRpIjoiZmIxYjQ4MGFhZjM4M2I2MzQ3MjI3MWMwYzc2NjhlZGMzMTc3Njk5NDJmNzE0ZDVhOWJmZDFjYjNhNGJhMjhmNTdiN2E5Zjg1MmYzYTQ1NGEiLCJpYXQiOjE3NDEwMTQyNjQsIm5iZiI6MTc0MTAxNDI2NCwiZXhwIjoxNzQzNjA2MjY0LCJzdWIiOiI5NDYxNTQiLCJzY29wZXMiOlsiKiJdfQ.C_Ko2DCL1jdd02F7XQR4FAUb1BwS0kBZx7vKzGssM5h5HFj_MFWTd1JlSmE0LYuPu8WBG01KawsMaw8VntfMIO2EW4ngmqEakF47VJj7iZ9dWXz79ZniWhJdzt5oE8BELUVq6R9l7g9ygwesHnQHSzuVSaiAuXUZh43bMs0if97-vu4TzMG7tAgUtYP-5CE_iObseza1Vd94KMs-8d-H2OxPGe1aS1L4AOF9cakQA0xcYwBSD8DQr_0EQLbJCA9Evp6CtoMJOgC8l8-OP9rbZHYPZFtrVIg_MUq0FGRPgsTbvtiv7-r-XnPaVsIBjYVOiXzR4Lh3b3Ln6gxFbQSSECJPH3sbfpYtWrXffUDTucjo9CotjDHJbjrwYBkPF-0ELyHFPpEN0xLV2x86EET_V0-UP-GGMpOVH3_zE1C3luPDb4DyWwNfW-tH_4vRvQmwDBorU8eJ0Sxv0W8BYRUMprOHHJcSMSTj1hXBIiW3SYPp8eqOmmpVFnjqLapPDVlJh6VA9O9XOiXBzCz2ZL940nUv1DgTYSUPZLSd3LFklFL49ehDdN2Zp2Ogb_Wc7-9sJaf1KVaoGVjXkKQkdsdEZyPs0-iFRC3YVqFX_GjNNK2kvCUgdSj1w2udP_vzoQX6gdxCEFjIT0_pyVdvMOMqoXnWPGYoeHUOycv7vXolYlc",
+            "2":"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6ImZmZWIwOWE3MmEyODU4OTgzNzA1ODFjYjM0YmE3NDAyMWMxYzAzODMzZGMwZmNhOTcwNmNlYTBjMGI1NTJmMGQ2M2ViZTMzNTY0NTU0NzdhIn0.eyJhdWQiOiIyIiwianRpIjoiZmZlYjA5YTcyYTI4NTg5ODM3MDU4MWNiMzRiYTc0MDIxYzFjMDM4MzNkYzBmY2E5NzA2Y2VhMGMwYjU1MmYwZDYzZWJlMzM1NjQ1NTQ3N2EiLCJpYXQiOjE3NDEwMTQ0MTQsIm5iZiI6MTc0MTAxNDQxNCwiZXhwIjoxNzQzNjA2NDE0LCJzdWIiOiI5NDU5MjgiLCJzY29wZXMiOlsiKiJdfQ.D8iHeSojo8jS6z_WtN2eiMUNOHv5KZ1JLdaO-v38Szg7bTmTUC0zXddRg84H4FHlYQ_MPzH4e0PaU3TfxJFBP2bux6PHLj6ehFYrGJB-8HzEufPDrnfWffcHIIM2Jdc9dpl86QCMppERApHlIW4mSdoRgki0hFouDAE_8HK_AWPr8GNpw1hp2v3A6Vv6RzUxYGbrfEDfAX728JAJARfd4FTrlyXg6FxgztXZCpFzVHMjGEZ50WOhwfVNNHEEmzIXbKIKgi3xxvmihkpk0Qlv6vQGLgns1v8f6sk7ueY6rL8X8QP8XE4cJ1WFq2oEpCVsCAe5dcd7rqIVFjjU2bDtG7AT53RH01ixxDkXguxFYHpi3VX-FnidlaBSeWRS01vlOLls3BIDG13A-IrqikkXjtSpzmwCkUjeAMSzojfVuhqsY3_Q9pGYwZLG6t5Uqly1Ecfk5tJKsgolRMfWaKhC3bBDxmLIZqCB1dBYds2NXdHYSWtrjI8B821gXIzVBAPKPCVpH_sJiMwNT1bXvWdwm3Z_QsYUDEEEtUwO9raFn8zAZmI-S1nqjVJUOPfZ1oSYFxOlbTqBezYgCnaZ4MDzlKqg5pJAzLeaQB8i6nt3BjZHZFag7PeKiHrlYmJgUgeV3d64PfOT8fTGv6Wvp63cvEkzD-74v5ETuL8HHoxMYo4",
+            "3":"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6ImU1YmYyODJkYmMwZjFiMDUxZTU1OGQxN2QyZDI4Zjc0ZGUzNWZjMjcyMDlkMDA0ZTJkYWE0ZjYyNGU0NmM0ZmMxZjU4MDNhZjA5ZTQ3NDdjIn0.eyJhdWQiOiIyIiwianRpIjoiZTViZjI4MmRiYzBmMWIwNTFlNTU4ZDE3ZDJkMjhmNzRkZTM1ZmMyNzIwOWQwMDRlMmRhYTRmNjI0ZTQ2YzRmYzFmNTgwM2FmMDllNDc0N2MiLCJpYXQiOjE3NDEwMTQ2MjgsIm5iZiI6MTc0MTAxNDYyOCwiZXhwIjoxNzQzNjA2NjI4LCJzdWIiOiI4NDcyNDUiLCJzY29wZXMiOlsiKiJdfQ.lbb9Ee93-qEc5CLVe7O5ZFSRlZLEqenVALZBOlcHYqdvOlCO37vz3Liuo9lQwhRF1tqXnFZ0dA1Re2RTG5FD9zluaZadNBLB2XiyTUQndSOCHzGIBgU-k2MPdf46P-9jxt7RXp0XHIr-RweLbfcW3fsuwn48DeFUW-XpLZq2PR_w3zZN5adh1LPpyc3BYBX8-Ens43cIakv3nM3Y2Dp2UArOQuh9WWC1FdcQZNJnL4y8LrqHybMMhCG7RKTWiMVIozSdTi39Goyy0yOTemBTimwUA5jYnf_VSY-l_ISdSISZHiNBVNoqU1Yrs19SzMo5IutsbDP7S-aKDZ5HDTNm8Mvs6KRBUgBiWCjF7Da7EGY_k2K9mh-3TsLjtkFIwMSlpk_7nITlf5cyb7KNjKufiLzFqzR7DEHDk-jDhUcdTnoc63aYk3R5-mICk9HBmDLOcvFGAOFx1d8L-srz9zGws3JwlsZDb1B0JNXaJ662plD2ujJzciw21iohVZpx2X2mpqfLBjnc5JDEeB8RmdCqy4Slo-HxK1xIytnY-JHg-Fjz_WEwTZdZ4HY9wvYlxOhr_iRjNC751unKY8eKOiEwH8fufL4AdD7c1p0vWj5N5KjbASR-MhFCoPn7_bZli1L0Lxpz-RhUE4CsT2fVnNbp03WS9ALCy_agCzltDTOHS40",
+            "4":"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjYxZmY2ZGQ2ZDRhMTk3YTkyMWJmMjBkNjJjMWYyMmM4YWIwNTIxMjI0OTdjNWU4ZmNhYjAyOTc0NWYxZTBjNTI3Yzk1NTgxZDcyMjQyOGFkIn0.eyJhdWQiOiIyIiwianRpIjoiNjFmZjZkZDZkNGExOTdhOTIxYmYyMGQ2MmMxZjIyYzhhYjA1MjEyMjQ5N2M1ZThmY2FiMDI5NzQ1ZjFlMGM1MjdjOTU1ODFkNzIyNDI4YWQiLCJpYXQiOjE3NDEwMTQ3NDYsIm5iZiI6MTc0MTAxNDc0NiwiZXhwIjoxNzQzNjA2NzQ2LCJzdWIiOiI4NDkxNDgiLCJzY29wZXMiOlsiKiJdfQ.jDyvFvmTK2Eb5Xvx7fmkkalLPS8BKm4-KsiN81zPVxDXhvxy7ubyTBLEe_n5i0gg1y5JBSriRE2HmgIA7WPZC8jPKCv0emf8wh6A5MNC_HBCj8QZ1RHuCn4sQwOahgDF3LNbVlNpsDL-XiOKisN1v3TpOfy1CKKpVrg4trhu878egFqbq-FfVRECoIyNKEt8FD4QibYvXRBfYIsyBaEIjVogFgc_cQmF-0-hDTFHw0dgnhSJMahrcarCUS0aq28QWIaTq7q3os4MbgNk3-BuKIa5IdEt7SdQI3yNVR8ysuNjcHWvPVuzny3zIRlsqAkx1VWu-IBVH6aj8rT-yHSlDBFygl6gAZ8GprBPpBdafFxT3wcjyl1hTbMQjWzqApgdkAVWKEWFXoJk7Q34FSIGpw62C9RamzL_bBZd8OicIVjid_HZYq56Pigj250vGuUXnRlNHkdYSZsrnTU370iuiyFKxTJg7GDE463g8cUB0A_egM9KUwwxL2G4Sr53vZarApK-ix-1C7jUbj-yBM-e43mCh73gXwwkocJfcv5hnLGA5SuRPgT5pCLmRzqJYLE2sgtlvrhuLAlXMVwubVPjZzJC1vqc4bZARICplihUhMB7VyaMeHeo_vCH0-ZlQOfGaUrFmHK0NEvJFRAb-tA3_lkVqzBSQZXPHjkPRZvrhPM",
+            "5":"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6ImM5M2VmZThmMjY1MmI3ZjM2YjQxMTAwOTdjYmUwM2IwOTAyNTkyYTQyZGQ1ZjQwNjI3OWQ2MDZiODcxMzQwZTYzM2E2YWE3ZmU0YWI0NjdhIn0.eyJhdWQiOiIyIiwianRpIjoiYzkzZWZlOGYyNjUyYjdmMzZiNDExMDA5N2NiZTAzYjA5MDI1OTJhNDJkZDVmNDA2Mjc5ZDYwNmI4NzEzNDBlNjMzYTZhYTdmZTRhYjQ2N2EiLCJpYXQiOjE3NDIxMDEwNzcsIm5iZiI6MTc0MjEwMTA3NywiZXhwIjoxNzQ0NjkzMDc3LCJzdWIiOiI3NDAxNTMiLCJzY29wZXMiOlsiKiJdfQ.RpoTztKz8KE7MBVcw57fFd8oCGKfF6rIZf5zXOPqOlaFBqMolXpN8tzhjOukUQxACHaPWllN4v_8GUcjXk5b-LzNFxAZNfR16JQKAIzTtMXYGNsxBNVqORtMsU7aJLR9y_zxEfEyt0fNEvEWV4OtqlRBo7jJmjTTmu1kXYSZcdtX9T7CvAFwgJsZheHhaJxmMhvKztUs0nREetnQfBI_VhwbhA1KoIlh4kOf55SC9hpcNAK2MUo-HHzTggH4rPtPxdSe3KEAVzfsrlOYk62YkET-N8er7RoO9AEMLOMKpb0qK6PWhiZiNW1ywDGg6VWb4hT2RQryngYXrtvReYk3uxQp5sR4hPNt7a7fYhJtwHQNbfZAwf7pDfgnKei5S4z8eeuiXc4MfPGF501NLNMROFUypY7bwcAMBh1uU72nDcujsSGsKKDjW_3K5YzcL47qvs4cw1eVgVWRGinjjgjYagQ7OmuD3USm4GnpiXzF7BIcK9H1NYMoWgfLl2a3dbU1QSLVABvsRn6FoAEbq8hBdyYOCkQ7kynmSkY_sjFMI7EbB__HRy7RmWRaMj3UzvHeeU0EVrv0UJ7EKM_jE1evOhLQm7ZW56hOu7G00Qcdk3VW10YZohpYhDiP2Vl1kghpdJDbfGbWJqIu2UcDJ9jEkcUK5-9As-m3wCU6X1HvL9E",
+
+        };
+
+        let payHistory = [];
+
+        function updateVisitCount() {
+            let count = localStorage.getItem('visitCount') || 0;
+            count = parseInt(count) + 1;
+            localStorage.setItem('visitCount', count);
+            document.getElementById('visitCount').textContent = count;
+        }
+
+        function initAuthSelect() {
+            const select = document.getElementById('authSelect');
+            for (let key in authorizationList) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.text = key;
+                select.appendChild(option);
+            }
+        }
+
+        function setLoading(isLoading) {
+            const queryBtn = document.getElementById('queryBtn');
+            const payBtn = document.getElementById('payBtn');
+            const queryText = document.getElementById('queryText');
+            const payText = document.getElementById('payText');
+            const querySpinner = document.getElementById('querySpinner');
+            const paySpinner = document.getElementById('paySpinner');
+
+            queryBtn.disabled = isLoading;
+            payBtn.disabled = isLoading;
+            queryText.textContent = isLoading ? '查询中' : '查询';
+            payText.textContent = isLoading ? '支付中' : '支付';
+            querySpinner.classList.toggle('hidden', !isLoading);
+            paySpinner.classList.toggle('hidden', !isLoading);
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        const firstHeaders = {
+            "Host": "park.lhsysz.com",
+            "Connection": "keep-alive",
+            "Accept": "application/json",
+            "GmToken": "9",
+            "xweb_xhr": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 MicroMessenger/7.0.20.1781(0x6700143B) NetType/WIFI MiniProgramEnv/Windows WindowsWechat/WMPF WindowsWechat(0x6309092b) XWEB/9129",
+            "Content-Type": "application/json",
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
+            "Referer": "https://servicewechat.com/wxda6d35e0951cf46d/64/page-frame.html",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "zh-CN,zh;q=0.9"
+        };
+
+        async function queryParking() {
+            setLoading(true);
+            const authId = document.getElementById('authSelect').value;
+            const headers = { ...firstHeaders, "Authorization": authorizationList[authId] };
+
+            try {
+                const response = await fetch(`https://park.lhsysz.com/shop/v1/parking/info?car_no=${encodeURIComponent(CAR_NO)}&type=car&gm_id=9`, {
+                    method: 'GET',
+                    headers: headers
+                });
+                const data = await response.json();
+                updateQueryTable(data);
+            } catch (error) {
+                showError('查询失败: ' + error.message);
+                updateQueryTable(null);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function updateQueryTable(data) {
+            const tbody = document.getElementById('queryResult').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = '';
+            if (data && data.code === 0) {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = data.result.orders.fee;
+                row.insertCell(1).textContent = data.result.orders.begin;
+                row.insertCell(2).textContent = data.result.orders.stay_duration;
+            } else {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = data?.message || '查询失败';
+                row.insertCell(1).textContent = '';
+                row.insertCell(2).textContent = '';
+            }
+        }
+
+        const secondHeaders = {
+            "Host": "park.lhsysz.com",
+            "Connection": "keep-alive",
+            "Accept": "application/json",
+            "GmToken": "9",
+            "xweb_xhr": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 MicroMessenger/7.0.20.1781(0x6700143B) NetType/WIFI MiniProgramEnv/Windows WindowsWechat/WMPF WindowsWechat(0x63090a1b) XWEB/9129",
+            "Content-Type": "application/json",
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
+            "Referer": "https://servicewechat.com/wxda6d35e0951cf46d/64/page-frame.html",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "zh-CN,zh;q=0.9"
+        };
+
+        const thirdHeaders = {
+            "Host": "sytgate.jslife.com.cn",
+            "Connection": "keep-alive",
+            "xweb_xhr": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 MicroMessenger/7.0.20.1781(0x6700143B) NetType/WIFI MiniProgramEnv/Windows WindowsWechat/WMPF WindowsWechat(0x63090a1b) XWEB/9129",
+            "Content-Type": "application/json",
+            "Accept": "*/*",
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
+            "Referer": "https://servicewechat.com/wx24b70f0ad2a9a89a/206/page-frame.html",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "zh-CN,zh;q=0.9"
+        };
+
+        async function payParking() {
+            if (!confirm('确认支付停车费用吗？')) return;
+            setLoading(true);
+            const authId = document.getElementById('authSelect').value;
+            const auth = authorizationList[authId];
+
+            try {
+                const firstResponse = await fetch(`https://park.lhsysz.com/shop/v1/parking/info?car_no=${encodeURIComponent(CAR_NO)}&type=car&gm_id=9`, {
+                    method: 'GET',
+                    headers: { ...firstHeaders, "Authorization": auth }
+                });
+                const firstData = await firstResponse.json();
+
+                if (firstData.code !== 0) {
+                    addPayHistory("🚷无法查询到车辆入场信息", authId);
+                    return;
+                }
+
+                const { third_no, fee, begin } = firstData.result.orders;
+
+                const secondResponse = await fetch('https://park.lhsysz.com/shop/v1/parking/pay', {
+                    method: 'POST',
+                    headers: { ...secondHeaders, "Authorization": auth },
+                    body: JSON.stringify({
+                        "code": "0c3Cgx0w30UKV23Hr10w3HLZER3Cgx0M",
+                        "car_no": CAR_NO,
+                        "card_no": CAR_NO,
+                        "entry_time": begin,
+                        "third_pay": true,
+                        "third_no": third_no,
+                        "fee": fee,
+                        "discount_fee": fee,
+                        "coupon_code": "",
+                        "coupon_name": "",
+                        "coupon_fee": "",
+                        "consume_point_fee": 0,
+                        "discount_total": fee,
+                        "card_id": 22
+                    })
+                });
+                const secondData = await secondResponse.json();
+                if (!secondData.result?.data?.payUrl) {
+                    throw new Error('支付URL获取失败');
+                }
+                const orderNo = secondData.result.data.payUrl.match(/orderNo=(\w+)/)[1];
+
+                const thirdResponse = await fetch('https://sytgate.jslife.com.cn/core-gateway/order/pay/prepay', {
+                    method: 'POST',
+                    headers: thirdHeaders,
+                    body: JSON.stringify({
+                        "userId": "",
+                        "orderNo": orderNo,
+                        "appType": "MINI_JSCARLIFE",
+                        "channelId": "LKL_WX",
+                        "subChannelId": "WeChat",
+                        "couponList": [],
+                        "callbackUrl": "MINI_JSCARLIFE",
+                        "payType": "MINI_PROGRAM",
+                        "reqSource": "WX_JTC",
+                        "openId": "ofjjT5LRjJb_dmRhPO0D3YqcT598",
+                        "appSource": "WX",
+                        "subAppSource": "WX_XCX_JTC",
+                        "unionId": "oRWxE56FsqijsUCbuZMUrKnXQKQ4",
+                        "version": "2.0"
+                    })
+                });
+                const thirdData = await thirdResponse.json();
+
+                let result;
+                switch(thirdData.resultCode) {
+                    case 2323: result = `✅缴费成功 ${fee}元`; break;
+                    case 3138: result = `❌请求频繁系统拒绝 ${fee}元`; break;
+                    case 0: result = `❌支付码已经使用 ${fee}元`; break;
+                    default: result = `❌支付失败 ${fee}元 (code: ${thirdData.resultCode})`;
+                }
+                addPayHistory(result, authId);
+            } catch (error) {
+                showError('支付失败: ' + error.message);
+                addPayHistory("🚫请求异常", authId);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function addPayHistory(result, authId) {
+            const now = new Date();
+            now.setHours(now.getHours() + 6);
+            payHistory.push([now.toLocaleString('zh-CN'), result, authId]);
+            const tbody = document.getElementById('payHistory').getElementsByTagName('tbody')[0];
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = payHistory[payHistory.length-1][0];
+            row.insertCell(1).textContent = result;
+            row.insertCell(2).textContent = authId;
+        }
+
+        window.onload = function() {
+            initAuthSelect();
+            updateVisitCount();
+        };
+    </script>
+</body>
+</html>
